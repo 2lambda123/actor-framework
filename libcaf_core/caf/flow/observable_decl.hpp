@@ -205,6 +205,9 @@ public:
   /// regular intervals .
   observable<cow_vector<T>> buffer(size_t count, timespan period);
 
+  /// Emits items in regular intervals .
+  observable<std::optional<T>> sample(timespan period);
+
   // -- combining --------------------------------------------------------------
 
   /// Combines the output of multiple @ref observable objects into one by

@@ -210,6 +210,7 @@ caf_add_component(
     caf/flow/op/publish.test.cpp
     caf/flow/op/pullable.cpp
     caf/flow/single.test.cpp
+    caf/flow/op/sample.test.cpp
     caf/flow/scoped_coordinator.cpp
     caf/flow/step/ignore_elements.test.cpp
     caf/flow/step/skip_last.test.cpp

@@ -29,6 +29,7 @@
 #include "caf/flow/op/never.hpp"
 #include "caf/flow/op/prefix_and_tail.hpp"
 #include "caf/flow/op/publish.hpp"
+#include "caf/flow/op/sample.hpp"
 #include "caf/flow/op/zip_with.hpp"
 #include "caf/flow/step/all.hpp"
 #include "caf/flow/subscription.hpp"
@@ -263,6 +264,10 @@ public:
 
   auto buffer(size_t count, timespan period) {
     return materialize().buffer(count, period);
+  }
+
+  auto sample(timespan period) {
+    return materialize().sample(period);
   }
 
   template <class Predicate>
@@ -774,6 +779,16 @@ observable<cow_vector<T>> observable<T>::buffer(size_t count, timespan period) {
                                  period);
   return pptr->add_child_hdl(std::in_place_type<impl_t>, count, *this,
                              std::move(obs));
+}
+
+template <class T>
+observable<std::optional<T>> observable<T>::sample(timespan period) {
+  using trait_t = op::sample_interval_trait<T>;
+  using impl_t = op::sample<trait_t>;
+  auto* pptr = parent();
+  auto obs = pptr->add_child_hdl(std::in_place_type<op::interval>, period,
+                                 period);
+  return pptr->add_child_hdl(std::in_place_type<impl_t>, *this, std::move(obs));
 }
 
 // -- observable: combining ----------------------------------------------------
