@@ -20,24 +20,14 @@ constexpr auto fwd_data = caf::flow::op::sample_input_t{};
 
 constexpr auto fwd_ctrl = caf::flow::op::sample_emit_t{};
 
-struct noskip_trait {
-  using input_type = int;
-  using output_type = std::optional<int>;
-  using select_token_type = int64_t;
-
-  output_type operator()(const std::optional<input_type>& xs) {
-    return output_type{xs};
-  }
-};
-
 struct fixture : test::fixture::deterministic, test::fixture::flow {
   // Similar to sample::subscribe, but returns a sample_sub pointer instead of
   // type-erasing it into a disposable.
-  template <class Trait = noskip_trait>
+  template <class T = int>
   auto raw_sub(caf::flow::observable<int> in,
                caf::flow::observable<int64_t> select,
-               caf::flow::observer<std::optional<int>> out) {
-    using sub_t = caf::flow::op::sample_sub<Trait>;
+               caf::flow::observer<int> out) {
+    using sub_t = caf::flow::op::sample_sub<T>;
     auto ptr = make_counted<sub_t>(coordinator(), out);
     ptr->init(in, select);
     out.on_subscribe(caf::flow::subscription{ptr});
@@ -56,9 +46,8 @@ SCENARIO("the sample operator emits items at regular intervals") {
   GIVEN("an observable") {
     WHEN("calling .sample(1s)") {
       THEN("the observer receives most recent values after 1s") {
-        auto outputs = std::make_shared<std::vector<std::optional<int>>>();
-        auto expected = std::vector<std::optional<int>>{32, 64, std::nullopt,
-                                                        512};
+        auto outputs = std::make_shared<std::vector<int>>();
+        auto expected = std::vector<int>{32, 64, 512};
         auto closed = std::make_shared<bool>(false);
         auto pub = caf::flow::multicaster<int>{coordinator()};
         sys.spawn([&pub, outputs, closed](caf::event_based_actor* self) {
@@ -66,9 +55,7 @@ SCENARIO("the sample operator emits items at regular intervals") {
             .observe_on(self) //
             .sample(1s)
             .do_on_complete([closed] { *closed = true; })
-            .for_each([outputs](const std::optional<int>& xs) {
-              outputs->emplace_back(xs);
-            });
+            .for_each([outputs](const int& xs) { outputs->emplace_back(xs); });
         });
         dispatch_messages();
         print_debug("emit the first six items");
@@ -105,7 +92,7 @@ SCENARIO("the sample operator forwards errors") {
   GIVEN("an observable that produces some values followed by an error") {
     WHEN("calling .sample() on it") {
       THEN("the observer receives the values and then the error") {
-        auto outputs = std::make_shared<std::vector<std::optional<int>>>();
+        auto outputs = std::make_shared<std::vector<int>>();
         auto err = std::make_shared<error>();
         auto pub = caf::flow::multicaster<int>{coordinator()};
         sys.spawn([&pub, outputs, err, this](caf::event_based_actor* self) {
@@ -115,9 +102,7 @@ SCENARIO("the sample operator forwards errors") {
               make_observable().fail<int>(make_error(caf::sec::runtime_error)))
             .sample(1s)
             .do_on_error([err](const error& what) { *err = what; })
-            .for_each([outputs](const std::optional<int>& xs) {
-              outputs->emplace_back(xs);
-            });
+            .for_each([outputs](const int& xs) { outputs->emplace_back(xs); });
         });
         dispatch_messages();
         pub.push({1});
@@ -136,7 +121,7 @@ SCENARIO("the sample operator forwards errors") {
         pub.close();
         run_flows();
         dispatch_messages();
-        auto expected = std::vector<std::optional<int>>{1, 2, 3};
+        auto expected = std::vector<int>{1, 2, 3};
         check_eq(*outputs, expected);
         check_eq(*err, caf::sec::runtime_error);
       }
@@ -145,16 +130,14 @@ SCENARIO("the sample operator forwards errors") {
   GIVEN("an observable that produces only an error") {
     WHEN("calling .sample() on it") {
       THEN("the observer receives the error") {
-        auto outputs = std::make_shared<std::vector<std::optional<int>>>();
+        auto outputs = std::make_shared<std::vector<int>>();
         auto err = std::make_shared<error>();
         sys.spawn([outputs, err](caf::event_based_actor* self) {
           self->make_observable()
             .fail<int>(make_error(caf::sec::runtime_error))
             .sample(1s)
             .do_on_error([err](const error& what) { *err = what; })
-            .for_each([outputs](const std::optional<int>& xs) {
-              outputs->emplace_back(xs);
-            });
+            .for_each([outputs](const int& xs) { outputs->emplace_back(xs); });
         });
         run_flows();
         dispatch_messages();
@@ -169,12 +152,12 @@ SCENARIO("samples dispose unexpected subscriptions") {
   GIVEN("an initialized sample operator") {
     WHEN("calling on_subscribe with unexpected subscriptions") {
       THEN("the sample disposes them immediately") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
-        auto data_sub = make_never_sub<std::optional<int>>(snk->as_observer());
-        auto ctrl_sub = make_never_sub<std::optional<int>>(snk->as_observer());
+        auto data_sub = make_never_sub<int>(snk->as_observer());
+        auto ctrl_sub = make_never_sub<int>(snk->as_observer());
         uut->fwd_on_subscribe(fwd_data, caf::flow::subscription{data_sub});
         uut->fwd_on_subscribe(fwd_ctrl, caf::flow::subscription{ctrl_sub});
         check(snk->subscribed());
@@ -194,7 +177,7 @@ SCENARIO("samples emit final items after an on_error event") {
   GIVEN("an initialized sample operator") {
     WHEN("calling on_error(data) on a sample without pending data") {
       THEN("the sample forward on_error immediately") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -205,13 +188,13 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_error(fwd_data, sec::runtime_error);
-        check_eq(snk->buf, std::vector{std::optional<int>{3}});
+        check_eq(snk->buf, std::vector{3});
         check(snk->aborted());
       }
     }
     WHEN("calling on_error(data) on a sample with pending data") {
       THEN("the sample still emits pending data before closing") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -225,13 +208,13 @@ SCENARIO("samples emit final items after an on_error event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{std::optional<int>({2})});
+        check_eq(snk->buf, std::vector{2});
         check(snk->aborted());
       }
     }
     WHEN("calling on_error(control) on a sample without pending data") {
       THEN("the sample forward on_error immediately") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -242,7 +225,7 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_error(fwd_ctrl, sec::runtime_error);
-        check_eq(snk->buf, std::vector{std::optional<int>({3})});
+        check_eq(snk->buf, std::vector{3});
         check(snk->aborted());
         uut->dispose();
         run_flows();
@@ -250,7 +233,7 @@ SCENARIO("samples emit final items after an on_error event") {
     }
     WHEN("calling on_error(control) on a sample with pending data") {
       THEN("the sample still emits pending data before closing") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -264,7 +247,7 @@ SCENARIO("samples emit final items after an on_error event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{std::optional<int>({2})});
+        check_eq(snk->buf, std::vector{2});
         check(snk->aborted());
       }
     }
@@ -275,7 +258,7 @@ SCENARIO("samples emit final items after an on_complete event") {
   GIVEN("an initialized sample operator") {
     WHEN("calling on_complete(data) on a sample without pending data") {
       THEN("the sample forward on_complete immediately") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -286,13 +269,13 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_complete(fwd_data);
-        check_eq(snk->buf, std::vector{std::optional<int>({3})});
+        check_eq(snk->buf, std::vector{3});
         check(snk->completed());
       }
     }
     WHEN("calling on_complete(data) on a sample with pending data") {
       THEN("the sample still emits pending data before closing") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -305,13 +288,13 @@ SCENARIO("samples emit final items after an on_complete event") {
         check(!snk->completed());
         snk->request(42);
         run_flows();
-        check_eq(snk->buf, std::vector{std::optional<int>({2})});
+        check_eq(snk->buf, std::vector{2});
         check(snk->completed());
       }
     }
     WHEN("calling on_complete(control) on a sample without pending data") {
       THEN("the sample raises an error immediately") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -322,13 +305,13 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_complete(fwd_ctrl);
-        check_eq(snk->buf, std::vector{std::optional<int>({3})});
+        check_eq(snk->buf, std::vector{3});
         check(snk->aborted());
       }
     }
     WHEN("calling on_complete(control) on a sample with pending data") {
       THEN("the sample raises an error after shipping pending items") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());
@@ -342,7 +325,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{std::optional<int>({2})});
+        check_eq(snk->buf, std::vector{2});
         check(snk->aborted());
       }
     }
@@ -353,7 +336,7 @@ SCENARIO("disposing a sample operator completes the flow") {
   GIVEN("a sample operator") {
     WHEN("disposing the subscription operator of the operator") {
       THEN("the observer receives an on_complete event") {
-        auto snk = flow::make_passive_observer<std::optional<int>>();
+        auto snk = flow::make_passive_observer<int>();
         auto uut = raw_sub(make_observable().never<int>(),
                            make_observable().never<int64_t>(),
                            snk->as_observer());

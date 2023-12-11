@@ -206,7 +206,7 @@ public:
   observable<cow_vector<T>> buffer(size_t count, timespan period);
 
   /// Emits items in regular intervals .
-  observable<std::optional<T>> sample(timespan period);
+  observable<T> sample(timespan period);
 
   // -- combining --------------------------------------------------------------
 

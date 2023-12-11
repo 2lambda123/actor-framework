@@ -782,9 +782,8 @@ observable<cow_vector<T>> observable<T>::buffer(size_t count, timespan period) {
 }
 
 template <class T>
-observable<std::optional<T>> observable<T>::sample(timespan period) {
-  using trait_t = op::sample_interval_trait<T>;
-  using impl_t = op::sample<trait_t>;
+observable<T> observable<T>::sample(timespan period) {
+  using impl_t = op::sample<T>;
   auto* pptr = parent();
   auto obs = pptr->add_child_hdl(std::in_place_type<op::interval>, period,
                                  period);

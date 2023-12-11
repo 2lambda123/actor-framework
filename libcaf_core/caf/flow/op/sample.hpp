@@ -9,6 +9,7 @@
 #include "caf/flow/observer.hpp"
 #include "caf/flow/op/cold.hpp"
 #include "caf/flow/op/state.hpp"
+#include "caf/flow/step/all.hpp"
 #include "caf/flow/subscription.hpp"
 #include "caf/unit.hpp"
 
@@ -20,28 +21,17 @@ struct sample_input_t {};
 
 struct sample_emit_t {};
 
-template <class T>
-struct sample_interval_trait {
-  using input_type = T;
-  using output_type = std::optional<T>;
-  using select_token_type = int64_t;
-
-  output_type operator()(const std::optional<input_type>& xs) {
-    return output_type{xs};
-  }
-};
-
 ///
-template <class Trait>
+template <class T>
 class sample_sub : public subscription::impl_base {
 public:
   // -- member types -----------------------------------------------------------
 
-  using input_type = typename Trait::input_type;
+  using input_type = T;
 
-  using output_type = typename Trait::output_type;
+  using output_type = T;
 
-  using select_token_type = typename Trait::select_token_type;
+  using select_token_type = int64_t;
 
   // -- constants --------------------------------------------------------------
 
@@ -189,9 +179,10 @@ private:
             state_ = err_ ? state::aborted : state::completed;
             return;
           }
-          Trait f;
-          out_.on_next(f(buf_));
-          buf_.reset();
+          if (buf_.has_value()) {
+            out_.on_next(*buf_);
+            buf_.reset();
+          }
         }
         if (!err_)
           out_.on_complete();
@@ -223,11 +214,12 @@ private:
   void do_emit() {
     if (demand_ == 0)
       return;
-    Trait f;
     --demand_;
     auto sampled = buf_.has_value();
-    out_.on_next(f(buf_));
-    buf_.reset();
+    if (sampled) {
+      out_.on_next(*buf_);
+      buf_.reset();
+    }
     if (value_sub_ && sampled)
       value_sub_.request(1);
   }
@@ -271,20 +263,20 @@ private:
   error err_;
 };
 
-template <class Trait>
-class sample : public cold<typename Trait::output_type> {
+template <class T>
+class sample : public cold<T> {
 public:
   // -- member types -----------------------------------------------------------
 
-  using input_type = typename Trait::input_type;
+  using input_type = T;
 
-  using output_type = typename Trait::output_type;
+  using output_type = T;
 
   using super = cold<output_type>;
 
   using input = observable<input_type>;
 
-  using selector = observable<typename Trait::select_token_type>;
+  using selector = observable<int64_t>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -296,7 +288,7 @@ public:
   // -- implementation of observable<T> -----------------------------------
 
   disposable subscribe(observer<output_type> out) override {
-    auto ptr = super::parent_->add_child(std::in_place_type<sample_sub<Trait>>,
+    auto ptr = super::parent_->add_child(std::in_place_type<sample_sub<T>>,
                                          out);
     ptr->init(in_, select_);
     if (!ptr->running()) {
