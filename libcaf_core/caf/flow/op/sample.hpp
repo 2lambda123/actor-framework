@@ -47,6 +47,7 @@ public:
   }
 
   // -- properties -------------------------------------------------------------
+
   coordinator* parent() const noexcept override {
     return parent_;
   }
@@ -64,7 +65,7 @@ public:
   }
 
   bool can_emit() const noexcept {
-    return buf_.has_value() || has_shut_down(state_);
+    return buf_.has_value();
   }
 
   // -- callbacks for the parent -----------------------------------------------
@@ -179,10 +180,6 @@ private:
             state_ = err_ ? state::aborted : state::completed;
             return;
           }
-          if (buf_.has_value()) {
-            out_.on_next(*buf_);
-            buf_.reset();
-          }
         }
         if (!err_)
           out_.on_complete();
@@ -199,12 +196,6 @@ private:
   void on_request() {
     if (demand_ == 0 || !can_emit())
       return;
-    if (running()) {
-      do_emit();
-      return;
-    }
-    if (buf_.has_value())
-      do_emit();
     if (!err_)
       out_.on_complete();
     else
@@ -225,9 +216,6 @@ private:
   }
 
   void do_pass() {
-    if (demand_ == 0)
-      return;
-    --demand_;
     if (value_sub_)
       value_sub_.request(1);
   }

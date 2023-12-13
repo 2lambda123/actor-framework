@@ -205,7 +205,7 @@ public:
   /// regular intervals .
   observable<cow_vector<T>> buffer(size_t count, timespan period);
 
-  /// Emits items in regular intervals .
+  /// Emits the most recent item of the input observable once per interval.
   observable<T> sample(timespan period);
 
   // -- combining --------------------------------------------------------------

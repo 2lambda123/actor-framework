@@ -62,24 +62,21 @@ SCENARIO("the sample operator emits items at regular intervals") {
         pub.push({1, 2, 4, 8, 16, 32});
         run_flows();
         dispatch_messages();
-        print_debug("force an empty sample");
+        print_debug("force a sample that emits single element");
         advance_time(1s);
         dispatch_messages();
-        print_debug("force a sample with a single element");
         pub.push(64);
         run_flows();
         dispatch_messages();
         advance_time(1s);
         dispatch_messages();
-        print_debug("force an empty sample");
+        print_debug("force a sample that does not emit element");
+        pub.push({128, 256, 512});
+        run_flows();
         advance_time(1s);
         dispatch_messages();
-        print_debug("emit the last items and close the source");
-        pub.push({128, 256, 512});
         pub.close();
         run_flows();
-        dispatch_messages();
-        advance_time(1s);
         dispatch_messages();
         check_eq(*outputs, expected);
         check(*closed);
@@ -95,11 +92,11 @@ SCENARIO("the sample operator forwards errors") {
         auto outputs = std::make_shared<std::vector<int>>();
         auto err = std::make_shared<error>();
         auto pub = caf::flow::multicaster<int>{coordinator()};
-        sys.spawn([&pub, outputs, err, this](caf::event_based_actor* self) {
+        sys.spawn([&pub, outputs, err](caf::event_based_actor* self) {
           pub.as_observable()
             .observe_on(self) //
-            .concat(
-              make_observable().fail<int>(make_error(caf::sec::runtime_error)))
+            .concat(self->make_observable().fail<int>(
+              make_error(caf::sec::runtime_error)))
             .sample(1s)
             .do_on_error([err](const error& what) { *err = what; })
             .for_each([outputs](const int& xs) { outputs->emplace_back(xs); });
@@ -188,7 +185,7 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_error(fwd_data, sec::runtime_error);
-        check_eq(snk->buf, std::vector{3});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
       }
     }
@@ -208,7 +205,7 @@ SCENARIO("samples emit final items after an on_error event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{2});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
       }
     }
@@ -225,7 +222,7 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_error(fwd_ctrl, sec::runtime_error);
-        check_eq(snk->buf, std::vector{3});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
         uut->dispose();
         run_flows();
@@ -247,7 +244,7 @@ SCENARIO("samples emit final items after an on_error event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{2});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
       }
     }
@@ -269,7 +266,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_complete(fwd_data);
-        check_eq(snk->buf, std::vector{3});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->completed());
       }
     }
@@ -288,7 +285,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         check(!snk->completed());
         snk->request(42);
         run_flows();
-        check_eq(snk->buf, std::vector{2});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->completed());
       }
     }
@@ -305,7 +302,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 3);
         check_eq(uut->pending(), true);
         uut->fwd_on_complete(fwd_ctrl);
-        check_eq(snk->buf, std::vector{3});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
       }
     }
@@ -325,7 +322,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         snk->request(42);
         uut->dispose();
         run_flows();
-        check_eq(snk->buf, std::vector{2});
+        check_eq(snk->buf, std::vector<int>{});
         check(snk->aborted());
       }
     }
