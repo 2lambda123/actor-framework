@@ -11,10 +11,10 @@
 using namespace caf;
 using namespace caf::flow;
 
+namespace {
+
 WITH_FIXTURE(test::fixture::flow) {
 
-//
-//
 SCENARIO("the never operator never invokes callbacks except when disposed") {
   GIVEN("a never operator") {
     WHEN("an observer subscribes and disposing the subscription") {
@@ -42,3 +42,5 @@ SCENARIO("the never operator never invokes callbacks except when disposed") {
 }
 
 } // WITH_FIXTURE(test::fixture::flow)
+
+} // namespace

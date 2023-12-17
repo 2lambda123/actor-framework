@@ -44,8 +44,6 @@ auto ls_range(T first, T last) {
   return result;
 }
 
-} // namespace
-
 WITH_FIXTURE(fixture) {
 
 SCENARIO("prefix_and_tail splits off initial elements") {
@@ -389,3 +387,5 @@ SCENARIO("disposing the tail of head_and_tail disposes the operator") {
 }
 
 } // WITH_FIXTURE(fixture)
+
+} // namespace

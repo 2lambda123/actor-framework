@@ -30,8 +30,6 @@ struct fixture : test::fixture::flow {
   }
 };
 
-} // namespace
-
 WITH_FIXTURE(fixture) {
 
 SCENARIO("zip_with combines inputs") {
@@ -249,3 +247,5 @@ SCENARIO("the zip_with operators disposes unexpected subscriptions") {
 }
 
 } // WITH_FIXTURE(fixture)
+
+} // namespace

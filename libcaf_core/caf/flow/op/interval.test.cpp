@@ -17,6 +17,8 @@ using namespace std::literals;
 using namespace caf;
 using namespace caf::flow;
 
+namespace {
+
 using i64_list = std::vector<int64_t>;
 
 struct fixture : test::fixture::deterministic, test::fixture::flow {};
@@ -92,3 +94,5 @@ SCENARIO("a timer is an observable interval with a single value") {
 }
 
 } // WITH_FIXTURE(fixture)
+
+} // namespace

@@ -29,8 +29,6 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
   }
 };
 
-} // namespace
-
 WITH_FIXTURE(fixture) {
 
 SCENARIO("a null cell emits zero items") {
@@ -169,3 +167,5 @@ SCENARIO("a failed cell emits zero item") {
 }
 
 } // WITH_FIXTURE(fixture)
+
+} // namespace

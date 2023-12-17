@@ -59,8 +59,6 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
   }
 };
 
-} // namespace
-
 WITH_FIXTURE(fixture) {
 
 SCENARIO("the merge operator combines inputs") {
@@ -533,3 +531,5 @@ TEST("the merge operator ignores request() calls with no subscriber") {
 }
 
 } // WITH_FIXTURE(fixture)
+
+} // namespace

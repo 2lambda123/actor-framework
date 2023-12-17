@@ -9,6 +9,8 @@
 using namespace caf;
 using namespace caf::flow;
 
+namespace {
+
 WITH_FIXTURE(test::fixture::flow) {
 
 SCENARIO("the fail operator immediately calls on_error on any subscriber") {
@@ -30,3 +32,5 @@ SCENARIO("the fail operator immediately calls on_error on any subscriber") {
 }
 
 } // WITH_FIXTURE(test::fixture::flow)
+
+} // namespace

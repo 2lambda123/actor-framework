@@ -11,9 +11,10 @@
 using namespace caf;
 using namespace caf::flow;
 
+namespace {
+
 WITH_FIXTURE(test::fixture::flow) {
 
-//
 SCENARIO("an empty observable terminates normally") {
   GIVEN("an empty int32") {
     WHEN("an observer subscribes") {
@@ -33,3 +34,5 @@ SCENARIO("an empty observable terminates normally") {
 }
 
 } // WITH_FIXTURE(test::fixture::flow)
+
+} // namespace
