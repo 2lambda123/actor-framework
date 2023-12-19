@@ -33,12 +33,6 @@ public:
 
   using select_token_type = int64_t;
 
-  // -- constants --------------------------------------------------------------
-
-  static constexpr size_t val_id = 0;
-
-  static constexpr size_t ctrl_id = 1;
-
   // -- constructors, destructors, and assignment operators --------------------
 
   sample_sub(coordinator* parent, observer<output_type> out)
@@ -96,19 +90,17 @@ public:
 
   void fwd_on_complete(sample_input_t) {
     value_sub_.release_later();
-    shutdown();
   }
 
   void fwd_on_error(sample_input_t, const error& what) {
     value_sub_.release_later();
     err_ = what;
-    shutdown();
   }
 
   void fwd_on_next(sample_input_t, const input_type& item) {
     if (running()) {
       buf_ = item;
-      do_pass();
+      value_sub_.request(1);
     }
   }
 
@@ -136,7 +128,20 @@ public:
   }
 
   void fwd_on_next(sample_emit_t, select_token_type) {
-    do_emit();
+    if (!value_sub_) {
+      shutdown();
+      return;
+    }
+    if (demand_ == 0)
+      return;
+    --demand_;
+    auto sampled = buf_.has_value();
+    if (sampled) {
+      out_.on_next(*buf_);
+      buf_.reset();
+    }
+    if (sampled)
+      value_sub_.request(1);
     control_sub_.request(1);
   }
 
@@ -149,7 +154,7 @@ public:
   void request(size_t n) override {
     CAF_ASSERT(out_.valid());
     demand_ += n;
-    // If we can ship a batch, schedule an event to do so.
+    // If we can ship an item, schedule an event to do so.
     if (demand_ == n && can_emit()) {
       parent_->delay_fn([strong_this = intrusive_ptr<sample_sub>{this}] {
         strong_this->on_request();
@@ -173,24 +178,11 @@ private:
   void shutdown() {
     value_sub_.cancel();
     control_sub_.cancel();
-    switch (state_) {
-      case state::running: {
-        if (buf_.has_value()) {
-          if (demand_ == 0) {
-            state_ = err_ ? state::aborted : state::completed;
-            return;
-          }
-        }
-        if (!err_)
-          out_.on_complete();
-        else
-          out_.on_error(err_);
-        state_ = state::disposed;
-        break;
-      }
-      default:
-        break;
-    }
+    if (!err_)
+      out_.on_complete();
+    else
+      out_.on_error(err_);
+    state_ = err_ ? state::aborted : state::disposed;
   }
 
   void on_request() {
@@ -200,24 +192,6 @@ private:
       out_.on_complete();
     else
       out_.on_error(err_);
-  }
-
-  void do_emit() {
-    if (demand_ == 0)
-      return;
-    --demand_;
-    auto sampled = buf_.has_value();
-    if (sampled) {
-      out_.on_next(*buf_);
-      buf_.reset();
-    }
-    if (value_sub_ && sampled)
-      value_sub_.request(1);
-  }
-
-  void do_pass() {
-    if (value_sub_)
-      value_sub_.request(1);
   }
 
   /// Stores the context (coordinator) that runs this flow.

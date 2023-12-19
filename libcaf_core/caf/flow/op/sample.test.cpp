@@ -77,6 +77,7 @@ SCENARIO("the sample operator emits items at regular intervals") {
         dispatch_messages();
         pub.close();
         run_flows();
+        advance_time(1s);
         dispatch_messages();
         check_eq(*outputs, expected);
         check(*closed);
@@ -117,6 +118,7 @@ SCENARIO("the sample operator forwards errors") {
         dispatch_messages();
         pub.close();
         run_flows();
+        advance_time(1s);
         dispatch_messages();
         auto expected = std::vector<int>{1, 2, 3};
         check_eq(*outputs, expected);
@@ -137,6 +139,7 @@ SCENARIO("the sample operator forwards errors") {
             .for_each([outputs](const int& xs) { outputs->emplace_back(xs); });
         });
         run_flows();
+        advance_time(1s);
         dispatch_messages();
         check(outputs->empty());
         check_eq(*err, caf::sec::runtime_error);
@@ -183,9 +186,11 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 1);
         uut->fwd_on_next(fwd_data, 2);
         uut->fwd_on_next(fwd_data, 3);
-        check_eq(uut->pending(), true);
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(uut->pending(), false);
         uut->fwd_on_error(fwd_data, sec::runtime_error);
-        check_eq(snk->buf, std::vector<int>{});
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(snk->buf, std::vector<int>{3});
         check(snk->aborted());
       }
     }
@@ -202,6 +207,7 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_error(fwd_data, sec::runtime_error);
         check(snk->buf.empty());
         check(!snk->aborted());
+        uut->fwd_on_next(fwd_ctrl, 1);
         snk->request(42);
         uut->dispose();
         run_flows();
@@ -220,9 +226,10 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 1);
         uut->fwd_on_next(fwd_data, 2);
         uut->fwd_on_next(fwd_data, 3);
-        check_eq(uut->pending(), true);
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(uut->pending(), false);
         uut->fwd_on_error(fwd_ctrl, sec::runtime_error);
-        check_eq(snk->buf, std::vector<int>{});
+        check_eq(snk->buf, std::vector<int>{3});
         check(snk->aborted());
         uut->dispose();
         run_flows();
@@ -238,14 +245,13 @@ SCENARIO("samples emit final items after an on_error event") {
         uut->fwd_on_next(fwd_data, 1);
         uut->fwd_on_next(fwd_data, 2);
         check_eq(uut->pending(), true);
+        check(!snk->aborted());
         uut->fwd_on_error(fwd_ctrl, sec::runtime_error);
         check(snk->buf.empty());
-        check(!snk->aborted());
-        snk->request(42);
+        check(snk->aborted());
         uut->dispose();
         run_flows();
         check_eq(snk->buf, std::vector<int>{});
-        check(snk->aborted());
       }
     }
   }
@@ -264,9 +270,11 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 1);
         uut->fwd_on_next(fwd_data, 2);
         uut->fwd_on_next(fwd_data, 3);
-        check_eq(uut->pending(), true);
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(uut->pending(), false);
         uut->fwd_on_complete(fwd_data);
-        check_eq(snk->buf, std::vector<int>{});
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(snk->buf, std::vector<int>{3});
         check(snk->completed());
       }
     }
@@ -283,7 +291,7 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_complete(fwd_data);
         check(snk->buf.empty());
         check(!snk->completed());
-        snk->request(42);
+        uut->fwd_on_next(fwd_ctrl, 1);
         run_flows();
         check_eq(snk->buf, std::vector<int>{});
         check(snk->completed());
@@ -300,9 +308,10 @@ SCENARIO("samples emit final items after an on_complete event") {
         uut->fwd_on_next(fwd_data, 1);
         uut->fwd_on_next(fwd_data, 2);
         uut->fwd_on_next(fwd_data, 3);
-        check_eq(uut->pending(), true);
+        uut->fwd_on_next(fwd_ctrl, 1);
+        check_eq(uut->pending(), false);
         uut->fwd_on_complete(fwd_ctrl);
-        check_eq(snk->buf, std::vector<int>{});
+        check_eq(snk->buf, std::vector<int>{3});
         check(snk->aborted());
       }
     }
