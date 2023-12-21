@@ -144,39 +144,15 @@ public:
     caf::flow::coordinator* parent_;
   };
 
-  /// A subscription implementation without internal logic.
-  class passive_subscription_impl final
-    : public caf::flow::subscription::impl_base {
-  public:
-    explicit passive_subscription_impl(caf::flow::coordinator* parent)
-      : parent_(parent) {
-      // nop
-    }
-
-    /// Incremented by `request`.
-    size_t demand = 0;
-
-    /// Flipped by `dispose`.
-    bool disposed_flag = false;
-
-    caf::flow::coordinator* parent() const noexcept override;
-
-    void request(size_t n) override;
-
-    bool disposed() const noexcept override;
-
-  private:
-    void do_dispose(bool from_external) override;
-
-    caf::flow::coordinator* parent_;
-  };
-
+  /// Returns a new canceling observer. The subscriber will either call `cancel`
+  /// on its subscription immediately in `on_subscribe` or wait until the first
+  /// call to `on_next` when `accept_subscription` is set to `true`.
   template <class T>
   class canceling_observer : public caf::flow::observer_impl_base<T> {
   public:
     explicit canceling_observer(caf::flow::coordinator* parent,
-                                bool accept_first)
-      : accept_next(accept_first), parent_(parent) {
+                                bool accept_subscription)
+      : accept_subscription(accept_subscription), parent_(parent) {
       // nop
     }
 
@@ -200,8 +176,8 @@ public:
     }
 
     void on_subscribe(caf::flow::subscription sub) override {
-      if (accept_next) {
-        accept_next = false;
+      if (accept_subscription) {
+        accept_subscription = false;
         sub.request(128);
         this->sub = std::move(sub);
         return;
@@ -212,7 +188,7 @@ public:
     int on_next_calls = 0;
     int on_error_calls = 0;
     int on_complete_calls = 0;
-    bool accept_next = false;
+    bool accept_subscription = false;
     caf::flow::subscription sub;
 
   private:

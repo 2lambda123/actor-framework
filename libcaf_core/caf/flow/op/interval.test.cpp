@@ -15,7 +15,6 @@
 using namespace std::literals;
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 

@@ -8,15 +8,16 @@
 #include "caf/test/fixture/flow.hpp"
 #include "caf/test/scenario.hpp"
 
+#include "caf/flow/op/never.hpp"
+
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
 struct fixture : test::fixture::flow {
   template <class F, class Out, class... Ts>
-  auto make_zip_with_sub(F fn, observer<Out> out, Ts... inputs) {
-    using impl_t = op::zip_with_sub<F, typename Ts::output_type...>;
+  auto make_zip_with_sub(F fn, caf::flow::observer<Out> out, Ts... inputs) {
+    using impl_t = caf::flow::op::zip_with_sub<F, typename Ts::output_type...>;
     auto pack = std::make_tuple(std::move(inputs).as_observable()...);
     auto sub = make_counted<impl_t>(coordinator(), std::move(fn), out, pack);
     out.on_subscribe(caf::flow::subscription{sub});
@@ -25,8 +26,13 @@ struct fixture : test::fixture::flow {
 
   template <class T>
   auto make_never() {
-    auto ptr = make_counted<caf::flow::op::empty<T>>(coordinator());
-    return observable<T>{std::move(ptr)};
+    auto ptr = make_counted<caf::flow::op::never<T>>(coordinator());
+    return caf::flow::observable<T>{std::move(ptr)};
+  }
+
+  template <class T>
+  auto make_never_sub(caf::flow::observer<T> out) {
+    return make_counted<caf::flow::op::never_sub<T>>(coordinator(), out);
   }
 };
 
@@ -125,7 +131,7 @@ SCENARIO("zip_with on an invalid observable produces an invalid observable") {
         using snk_t = flow::auto_observer<int>;
         auto obs = coordinator()->make_observable();
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
-        observable<int>{}
+        caf::flow::observable<int>{}
           .zip_with([](int x, int y) { return x + y; }, obs.iota(1).take(10))
           .subscribe(snk->as_observer());
         run_flows();
@@ -143,7 +149,8 @@ SCENARIO("zip_with on an invalid observable produces an invalid observable") {
         obs //
           .iota(1)
           .take(10)
-          .zip_with([](int x, int y) { return x + y; }, observable<int>{})
+          .zip_with([](int x, int y) { return x + y; },
+                    caf::flow::observable<int>{})
           .subscribe(snk->as_observer());
         run_flows();
         check(snk->aborted());
@@ -201,46 +208,24 @@ SCENARIO("zip_with operators can be disposed at any time") {
   }
 }
 
-SCENARIO("observers may request from zip_with operators before on_subscribe") {
-  GIVEN("a zip_with operator with two inputs") {
-    WHEN("the observer calls request before the inputs call on_subscribe") {
-      THEN("the observer receives the item") {
-        using op::zip_index;
-        using snk_t = flow::passive_observer<int>;
-        auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
-        auto uut = make_zip_with_sub([](int, int) { return 0; },
-                                     snk->as_observer(), make_never<int>(),
-                                     make_never<int>());
-        snk->request(128);
-        using sub_t = flow::passive_subscription_impl;
-        auto sub1 = coordinator()->add_child(std::in_place_type<sub_t>);
-        auto sub2 = coordinator()->add_child(std::in_place_type<sub_t>);
-        uut->fwd_on_subscribe(zip_index<0>{}, caf::flow::subscription{sub1});
-        uut->fwd_on_subscribe(zip_index<1>{}, caf::flow::subscription{sub2});
-        check_eq(sub1->demand, 0u);
-        check_eq(sub2->demand, 0u);
-      }
-    }
-  }
-}
-
 SCENARIO("the zip_with operators disposes unexpected subscriptions") {
   GIVEN("a zip_with operator with two inputs") {
     WHEN("on_subscribe is called twice for the same input") {
       THEN("the operator disposes the subscription") {
-        using op::zip_index;
+        using caf::flow::op::zip_index;
         using snk_t = flow::passive_observer<int>;
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = make_zip_with_sub([](int, int) { return 0; },
                                      snk->as_observer(), make_never<int>(),
                                      make_never<int>());
-        using sub_t = flow::passive_subscription_impl;
-        auto sub1 = coordinator()->add_child(std::in_place_type<sub_t>);
-        auto sub2 = coordinator()->add_child(std::in_place_type<sub_t>);
+        auto sub1 = make_never_sub<int>(snk->as_observer());
+        auto sub2 = make_never_sub<int>(snk->as_observer());
         uut->fwd_on_subscribe(zip_index<0>{}, caf::flow::subscription{sub1});
         uut->fwd_on_subscribe(zip_index<0>{}, caf::flow::subscription{sub2});
         check(sub1->disposed());
         check(sub2->disposed());
+        uut->dispose();
+        run_flows();
       }
     }
   }

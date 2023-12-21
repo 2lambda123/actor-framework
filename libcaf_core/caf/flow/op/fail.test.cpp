@@ -7,7 +7,6 @@
 #include "caf/test/test.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 

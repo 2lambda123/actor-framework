@@ -9,7 +9,6 @@
 #include "caf/test/scenario.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 

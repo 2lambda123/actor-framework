@@ -10,10 +10,10 @@
 #include "caf/test/scenario.hpp"
 #include "caf/test/test.hpp"
 
-#include "caf/all.hpp"
+#include "caf/flow/multicaster.hpp"
+#include "caf/log/test.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
@@ -28,7 +28,7 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
   // Creates a flow::op::merge<T>
   template <class T, class... Inputs>
   auto make_operator(Inputs... inputs) {
-    using impl_t = op::merge<T>;
+    using impl_t = caf::flow::op::merge<T>;
     return make_counted<impl_t>(coordinator(),
                                 std::move(inputs).as_observable()...);
   }
@@ -36,8 +36,9 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
   // Similar to merge::subscribe, but returns a merge_sub pointer instead of
   // type-erasing it into a disposable.
   template <class T>
-  auto raw_sub(observer<T> out) {
-    auto ptr = make_counted<op::merge_sub<T>>(coordinator(), out, 8, 8);
+  auto raw_sub(caf::flow::observer<T> out) {
+    auto ptr = make_counted<caf::flow::op::merge_sub<T>>(coordinator(), out, 8,
+                                                         8);
     out.on_subscribe(caf::flow::subscription{ptr});
     return ptr;
   }
@@ -45,17 +46,17 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
   // Similar to merge::subscribe, but returns a merge_sub pointer instead of
   // type-erasing it into a disposable.
   template <class T, class... Inputs>
-  auto raw_sub(observer<T> out, Inputs... inputs) {
-    using impl_t = op::merge_sub<T>;
-    auto merge = op::merge<T>{coordinator(),
-                              std::move(inputs).as_observable()...};
+  auto raw_sub(caf::flow::observer<T> out, Inputs... inputs) {
+    using impl_t = caf::flow::op::merge_sub<T>;
+    auto merge = caf::flow::op::merge<T>{coordinator(),
+                                         std::move(inputs).as_observable()...};
     auto res = merge.subscribe(std::move(out));
     return intrusive_ptr<impl_t>{static_cast<impl_t*>(res.ptr())};
   }
 
   template <class T>
-  auto make_never_sub(observer<T> out) {
-    return make_counted<op::never_sub<T>>(coordinator(), out);
+  auto make_never_sub(caf::flow::observer<T> out) {
+    return make_counted<caf::flow::op::never_sub<T>>(coordinator(), out);
   }
 };
 
@@ -113,7 +114,7 @@ SCENARIO("mergers round-robin over their inputs") {
   GIVEN("a merger with inputs observables that produce no inputs") {
     WHEN("subscribing to the merger") {
       THEN("the merger immediately closes") {
-        using ops_t = op::merge<int>;
+        using ops_t = caf::flow::op::merge<int>;
         using snk_t = auto_observer<int>;
         auto nil = make_observable().empty<int>().as_observable();
         auto uut = coordinator()->add_child_hdl(std::in_place_type<ops_t>, nil,
@@ -129,34 +130,36 @@ SCENARIO("mergers round-robin over their inputs") {
   GIVEN("a merger with one input that completes") {
     WHEN("subscribing to the merger and requesting before the first push") {
       using snk_t = passive_observer<int>;
-      auto src = multicaster<int>{coordinator()};
+      auto src = caf::flow::multicaster<int>{coordinator()};
       auto nil = make_observable().empty<int>().as_observable();
-      auto uut = make_counted<op::merge<int>>(coordinator(),
-                                              src.as_observable(), nil);
+      auto uut = make_counted<caf::flow::op::merge<int>>(coordinator(),
+                                                         src.as_observable(),
+                                                         nil);
       auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
       uut->subscribe(snk->as_observer());
       run_flows();
       THEN("the merger forwards all items from the source") {
-        print_debug("the observer enters the state subscribed");
+        log::test::debug("the observer enters the state subscribed");
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector<int>{});
-        print_debug("when requesting data, no data is received yet");
+        log::test::debug("when requesting data, no data is received yet");
         snk->sub.request(2);
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector<int>{});
-        print_debug("after pushing, the observer immediately receives them");
+        log::test::debug(
+          "after pushing, the observer immediately receives them");
         src.push({1, 2, 3, 4, 5});
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector{1, 2});
-        print_debug(
+        log::test::debug(
           "when requesting more data, the observer gets the remainder");
         snk->sub.request(20);
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector{1, 2, 3, 4, 5});
-        print_debug("the merger closes if the source closes");
+        log::test::debug("the merger closes if the source closes");
         src.close();
         run_flows();
         check_eq(snk->state, flow::observer_state::completed);
@@ -164,9 +167,9 @@ SCENARIO("mergers round-robin over their inputs") {
       }
     }
     WHEN("subscribing to the merger pushing before the first request") {
-      using ops_t = op::merge<int>;
+      using ops_t = caf::flow::op::merge<int>;
       using snk_t = passive_observer<int>;
-      auto src = multicaster<int>{coordinator()};
+      auto src = caf::flow::multicaster<int>{coordinator()};
       auto nil = make_observable().empty<int>().as_observable();
       auto uut = coordinator()->add_child(std::in_place_type<ops_t>,
                                           src.as_observable(), nil);
@@ -175,27 +178,27 @@ SCENARIO("mergers round-robin over their inputs") {
       uut->subscribe(snk->as_observer());
       run_flows();
       THEN("the merger forwards all items from the source") {
-        print_debug("the observer enters the state subscribed");
+        log::test::debug("the observer enters the state subscribed");
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector<int>{});
-        print_debug("after pushing, the observer receives nothing yet");
+        log::test::debug("after pushing, the observer receives nothing yet");
         src.push({1, 2, 3, 4, 5});
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector<int>{});
-        print_debug(
+        log::test::debug(
           "the observer get the first items immediately when requesting");
         snk->sub.request(2);
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector{1, 2});
-        print_debug(
+        log::test::debug(
           "when requesting more data, the observer gets the remainder");
         snk->sub.request(20);
         run_flows();
         check_eq(snk->state, flow::observer_state::subscribed);
         check_eq(snk->buf, std::vector{1, 2, 3, 4, 5});
-        print_debug("the merger closes if the source closes");
+        log::test::debug("the merger closes if the source closes");
         src.close();
         run_flows();
         check_eq(snk->state, flow::observer_state::completed);
@@ -205,9 +208,9 @@ SCENARIO("mergers round-robin over their inputs") {
   }
   GIVEN("a merger with one input that aborts after some items") {
     WHEN("subscribing to the merger") {
-      using ops_t = op::merge<int>;
+      using ops_t = caf::flow::op::merge<int>;
       using snk_t = passive_observer<int>;
-      auto src = multicaster<int>{coordinator()};
+      auto src = caf::flow::multicaster<int>{coordinator()};
       auto nil = make_observable().empty<int>().as_observable();
       auto uut = coordinator()->add_child(std::in_place_type<ops_t>,
                                           src.as_observable(), nil);
@@ -215,12 +218,13 @@ SCENARIO("mergers round-robin over their inputs") {
       uut->subscribe(snk->as_observer());
       run_flows();
       THEN("the merger forwards all items from the source until the error") {
-        print_debug("after the source pushed five items, it emits an error");
+        log::test::debug(
+          "after the source pushed five items, it emits an error");
         src.push({1, 2, 3, 4, 5});
         run_flows();
         src.abort(make_error(sec::runtime_error));
         run_flows();
-        print_debug(
+        log::test::debug(
           "when requesting, the observer still obtains the items first");
         snk->sub.request(2);
         run_flows();
@@ -238,7 +242,7 @@ SCENARIO("mergers round-robin over their inputs") {
     WHEN("subscribing to the merger") {
       THEN("the subscribers receives all values from all observables") {
         using snk_t = auto_observer<int>;
-        auto inputs = std::vector<observable<int>>{
+        auto inputs = std::vector<caf::flow::observable<int>>{
           make_observable().iota(1).take(3).as_observable(),
           make_observable().iota(4).take(3).as_observable(),
           make_observable().iota(7).take(3).as_observable(),
@@ -262,7 +266,7 @@ SCENARIO("empty merge operators only call on_complete") {
       THEN("the observer only receives an on_complete event") {
         using snk_t = flow::auto_observer<int>;
         auto nil = make_observable() //
-                     .empty<observable<int>>()
+                     .empty<caf::flow::observable<int>>()
                      .as_observable();
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto sub = make_operator<int>(nil)->subscribe(snk->as_observer());
@@ -284,7 +288,7 @@ SCENARIO("the merge operator disposes unexpected subscriptions") {
         auto r1 = make_observable().just(1).as_observable();
         auto r2 = make_observable().just(2).as_observable();
         auto uut = raw_sub(snk->as_observer(), r1, r2);
-        using sub_t = op::never_sub<int>;
+        using sub_t = caf::flow::op::never_sub<int>;
         auto sub = coordinator()->add_child(std::in_place_type<sub_t>,
                                             snk->as_observer());
         run_flows();
@@ -305,7 +309,8 @@ SCENARIO("the merge operator emits already buffered data on error") {
   GIVEN("an observable source that emits an error after the first observable") {
     WHEN("the error occurs while data is buffered") {
       THEN("the merger forwards the buffered items before the error") {
-        auto src = multicaster<observable<int>>{coordinator()};
+        auto src
+          = caf::flow::multicaster<caf::flow::observable<int>>{coordinator()};
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub(snk->as_observer(), src.as_observable());
         // First observable emits 3 items and then does nothing.
@@ -332,7 +337,8 @@ SCENARIO("the merge operator emits already buffered data on error") {
     }
     WHEN("the error occurs while no data is buffered") {
       THEN("the merger forwards the error immediately") {
-        auto src = multicaster<observable<int>>{coordinator()};
+        auto src
+          = caf::flow::multicaster<caf::flow::observable<int>>{coordinator()};
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub(snk->as_observer(), src.as_observable());
         // First observable emits 3 items and then does nothing.
@@ -357,7 +363,7 @@ SCENARIO("the merge operator emits already buffered data on error") {
   GIVEN("an input observable that emits an error after emitting some items") {
     WHEN("the error occurs while data is buffered") {
       THEN("the merger forwards the buffered items before the error") {
-        auto src = multicaster<int>{coordinator()};
+        auto src = caf::flow::multicaster<int>{coordinator()};
         auto nil = make_observable().never<int>().as_observable();
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub(snk->as_observer(), src.as_observable(), nil);
@@ -382,7 +388,7 @@ SCENARIO("the merge operator emits already buffered data on error") {
     }
     WHEN("the error occurs while no data is buffered") {
       THEN("the merger forwards the error immediately") {
-        auto src = multicaster<int>{coordinator()};
+        auto src = caf::flow::multicaster<int>{coordinator()};
         auto nil = make_observable().never<int>().as_observable();
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub(snk->as_observer(), src.as_observable(), nil);
@@ -496,7 +502,7 @@ TEST("merge operators ignore fwd_on_error calls with unknown keys") {
 TEST("the merge operator merges any number of input observables") {
   using snk_t = flow::passive_observer<int>;
   auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
-  auto inputs = std::vector<observable<int>>{};
+  auto inputs = std::vector<caf::flow::observable<int>>{};
   for (int i = 0; i < 1'000; ++i)
     inputs.push_back(make_observable().just(i).as_observable());
   auto uut = raw_sub(snk->as_observer(),

@@ -9,7 +9,6 @@
 #include "caf/test/scenario.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
@@ -20,7 +19,7 @@ SCENARIO("the defer operator produces a fresh observable for each observer") {
     WHEN("two observers subscribes") {
       THEN("each observer subscribes to a fresh observable") {
         using ivec = std::vector<int>;
-        using snk_t = passive_observer<int>;
+        using snk_t = flow::passive_observer<int>;
         size_t factory_calls = 0;
         auto factory = [this, &factory_calls] {
           ++factory_calls;

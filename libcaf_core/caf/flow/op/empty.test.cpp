@@ -9,7 +9,6 @@
 #include "caf/test/test.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
@@ -19,7 +18,7 @@ SCENARIO("an empty observable terminates normally") {
   GIVEN("an empty int32") {
     WHEN("an observer subscribes") {
       THEN("the observer receives on_complete") {
-        using snk_t = passive_observer<int32_t>;
+        using snk_t = flow::passive_observer<int32_t>;
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         make_observable().empty<int32_t>().subscribe(snk->as_observer());
         run_flows();

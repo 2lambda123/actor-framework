@@ -8,10 +8,7 @@
 #include "caf/test/fixture/flow.hpp"
 #include "caf/test/scenario.hpp"
 
-#include "caf/all.hpp"
-
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
@@ -24,8 +21,8 @@ struct fixture : test::fixture::deterministic, test::fixture::flow {
     return make_counted<int_cell>(coordinator());
   }
 
-  observable<int> lift(int_cell_ptr cell) {
-    return observable<int>{cell};
+  caf::flow::observable<int> lift(int_cell_ptr cell) {
+    return caf::flow::observable<int>{cell};
   }
 };
 

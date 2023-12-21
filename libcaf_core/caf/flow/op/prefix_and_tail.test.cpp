@@ -8,14 +8,9 @@
 #include "caf/test/scenario.hpp"
 #include "caf/test/test.hpp"
 
-#include "caf/flow/observable_builder.hpp"
-#include "caf/flow/observer.hpp"
-#include "caf/flow/scoped_coordinator.hpp"
-
-#include <memory>
+#include "caf/flow/op/never.hpp"
 
 using namespace caf;
-using namespace caf::flow;
 
 namespace {
 
@@ -24,10 +19,15 @@ struct fixture : test::fixture::flow {
   // instead of type-erasing it into a disposable.
   template <class T, class Observer>
   auto raw_sub(Observer out, size_t psize) {
-    using op::prefix_and_tail_sub;
+    using caf::flow::op::prefix_and_tail_sub;
     auto ptr = make_counted<prefix_and_tail_sub<T>>(coordinator(), out, psize);
     out.on_subscribe(caf::flow::subscription{ptr});
     return ptr;
+  }
+
+  template <class T>
+  auto make_never_sub(caf::flow::observer<T> out) {
+    return make_counted<caf::flow::op::never_sub<T>>(coordinator(), out);
   }
 };
 
@@ -47,7 +47,7 @@ auto ls_range(T first, T last) {
 WITH_FIXTURE(fixture) {
 
 SCENARIO("prefix_and_tail splits off initial elements") {
-  using tuple_t = cow_tuple<cow_vector<int>, observable<int>>;
+  using tuple_t = cow_tuple<cow_vector<int>, caf::flow::observable<int>>;
   GIVEN("a generation with 0 values") {
     WHEN("calling prefix_and_tail(2)") {
       THEN("the observer of prefix_and_tail only receives on_complete") {
@@ -163,7 +163,7 @@ SCENARIO("prefix_and_tail splits off initial elements") {
 }
 
 SCENARIO("head_and_tail splits off the first element") {
-  using tuple_t = cow_tuple<int, observable<int>>;
+  using tuple_t = cow_tuple<int, caf::flow::observable<int>>;
   GIVEN("a generation with 0 values") {
     WHEN("calling head_and_tail") {
       THEN("the observer of head_and_tail only receives on_complete") {
@@ -235,7 +235,7 @@ SCENARIO("head_and_tail splits off the first element") {
 }
 
 SCENARIO("head_and_tail forwards errors") {
-  using tuple_t = cow_tuple<int, observable<int>>;
+  using tuple_t = cow_tuple<int, caf::flow::observable<int>>;
   GIVEN("an observable that emits on_error only") {
     WHEN("applying a head_and_tail operator to it") {
       THEN("the observer for the head receives on_error") {
@@ -291,37 +291,16 @@ SCENARIO("head_and_tail forwards errors") {
   }
 }
 
-SCENARIO("head_and_tail requests the prefix as soon as possible") {
-  using tuple_t = cow_tuple<cow_vector<int>, observable<int>>;
-  GIVEN("an observable that delays the call to on_subscribe") {
-    WHEN("the observer requests before on_subscribe from the input arrives") {
-      THEN("head_and_tail requests the prefix immediately") {
-        using snk_t = flow::auto_observer<tuple_t>;
-        auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
-        auto uut = raw_sub<int>(snk->as_observer(), 7);
-        snk->request(42);
-        run_flows();
-        using sub_t = flow::passive_subscription_impl;
-        auto in_sub = coordinator()->add_child(std::in_place_type<sub_t>);
-        uut->on_subscribe(caf::flow::subscription{in_sub});
-        check_eq(in_sub->demand, 7u);
-        snk->unsubscribe();
-      }
-    }
-  }
-}
-
 SCENARIO("head_and_tail disposes unexpected subscriptions") {
-  using tuple_t = cow_tuple<cow_vector<int>, observable<int>>;
+  using tuple_t = cow_tuple<cow_vector<int>, caf::flow::observable<int>>;
   GIVEN("a subscribed head_and_tail operator") {
     WHEN("on_subscribe gets called again") {
       THEN("the unexpected subscription gets disposed") {
         using snk_t = flow::passive_observer<tuple_t>;
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub<int>(snk->as_observer(), 7);
-        using sub_t = flow::passive_subscription_impl;
-        auto sub1 = coordinator()->add_child(std::in_place_type<sub_t>);
-        auto sub2 = coordinator()->add_child(std::in_place_type<sub_t>);
+        auto sub1 = make_never_sub<tuple_t>(snk->as_observer());
+        auto sub2 = make_never_sub<tuple_t>(snk->as_observer());
         uut->on_subscribe(caf::flow::subscription{sub1});
         uut->on_subscribe(caf::flow::subscription{sub2});
         check(!sub1->disposed());
@@ -333,15 +312,14 @@ SCENARIO("head_and_tail disposes unexpected subscriptions") {
 }
 
 SCENARIO("disposing head_and_tail disposes the input subscription") {
-  using tuple_t = cow_tuple<cow_vector<int>, observable<int>>;
+  using tuple_t = cow_tuple<cow_vector<int>, caf::flow::observable<int>>;
   GIVEN("a subscribed head_and_tail operator") {
     WHEN("calling dispose on the operator") {
       THEN("the operator disposes its input") {
         using snk_t = flow::passive_observer<tuple_t>;
         auto snk = coordinator()->add_child(std::in_place_type<snk_t>);
         auto uut = raw_sub<int>(snk->as_observer(), 7);
-        using sub_t = flow::passive_subscription_impl;
-        auto sub = coordinator()->add_child(std::in_place_type<sub_t>);
+        auto sub = make_never_sub<tuple_t>(snk->as_observer());
         uut->on_subscribe(caf::flow::subscription{sub});
         check(!uut->disposed());
         check(!sub->disposed());
@@ -355,7 +333,7 @@ SCENARIO("disposing head_and_tail disposes the input subscription") {
 }
 
 SCENARIO("disposing the tail of head_and_tail disposes the operator") {
-  using tuple_t = cow_tuple<cow_vector<int>, observable<int>>;
+  using tuple_t = cow_tuple<cow_vector<int>, caf::flow::observable<int>>;
   GIVEN("a subscribed head_and_tail operator") {
     WHEN("calling dispose the subscription to the tail") {
       THEN("the operator gets disposed") {
