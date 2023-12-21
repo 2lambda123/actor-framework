@@ -58,10 +58,6 @@ public:
     return buf_.has_value();
   }
 
-  bool can_emit() const noexcept {
-    return buf_.has_value();
-  }
-
   // -- callbacks for the parent -----------------------------------------------
 
   void init(observable<input_type> vals, observable<select_token_type> ctrl) {
@@ -85,7 +81,7 @@ public:
       return;
     }
     value_sub_ = std::move(sub);
-    value_sub_.request(1);
+    value_sub_.request(defaults::flow::buffer_size);
   }
 
   void fwd_on_complete(sample_input_t) {
@@ -140,8 +136,6 @@ public:
       out_.on_next(*buf_);
       buf_.reset();
     }
-    if (sampled)
-      value_sub_.request(1);
     control_sub_.request(1);
   }
 
@@ -154,12 +148,6 @@ public:
   void request(size_t n) override {
     CAF_ASSERT(out_.valid());
     demand_ += n;
-    // If we can ship an item, schedule an event to do so.
-    if (demand_ == n && can_emit()) {
-      parent_->delay_fn([strong_this = intrusive_ptr<sample_sub>{this}] {
-        strong_this->on_request();
-      });
-    }
   }
 
 private:
@@ -186,7 +174,7 @@ private:
   }
 
   void on_request() {
-    if (demand_ == 0 || !can_emit())
+    if (demand_ == 0 || !buf_.has_value())
       return;
     if (!err_)
       out_.on_complete();
