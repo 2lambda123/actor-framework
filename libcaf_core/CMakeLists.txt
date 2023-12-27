@@ -195,22 +195,22 @@ caf_add_component(
     caf/flow/concat_map.test.cpp
     caf/flow/coordinated.cpp
     caf/flow/coordinator.cpp
-    caf/flow/for_each.test.cpp
     caf/flow/flat_map.test.cpp
+    caf/flow/for_each.test.cpp
     caf/flow/generation.test.cpp
     caf/flow/mixed.test.cpp
     caf/flow/multicaster.test.cpp
     caf/flow/observable.test.cpp
-    caf/flow/observe_on.test.cpp
     caf/flow/observable_builder.cpp
+    caf/flow/observe_on.test.cpp
     caf/flow/op/buffer.test.cpp
     caf/flow/op/concat.test.cpp
     caf/flow/op/interval.cpp
     caf/flow/op/mcast.test.cpp
     caf/flow/op/publish.test.cpp
     caf/flow/op/pullable.cpp
-    caf/flow/single.test.cpp
     caf/flow/scoped_coordinator.cpp
+    caf/flow/single.test.cpp
     caf/flow/step/ignore_elements.test.cpp
     caf/flow/step/skip_last.test.cpp
     caf/flow/step/take_last.test.cpp
@@ -270,6 +270,7 @@ caf_add_component(
     caf/serializer.cpp
     caf/settings.cpp
     caf/skip.cpp
+    caf/stateful.test.cpp
     caf/stream.cpp
     caf/stream.test.cpp
     caf/string_algorithms.cpp
