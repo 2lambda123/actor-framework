@@ -20,9 +20,10 @@ ${BASELINE}         bob: Hello\nbob: Today is a wonderful day!
 
 *** Test Cases ***
 Send Some message
-    Start Process    ${CLIENT_PATH}    -p    ${SERVER_PORT}    -n    sam    alias=sam
+    Start Process    ${CLIENT_PATH}    -p    ${SERVER_PORT}    -n    listening    alias=listening
     Run Process    ${CLIENT_PATH}    -p    ${SERVER_PORT}    -n    bob    stdin=${INPUT}
-    ${result}=    Terminate Process    sam
+    Sleep    100ms    Wait for write to stdout
+    ${result}=    Terminate Process    listening
     Should Be Equal As Strings    ${result.stdout}    ${BASELINE}
 
 
