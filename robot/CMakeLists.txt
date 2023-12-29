@@ -154,4 +154,13 @@ add_test(
         --variable BINARY_PATH:$<TARGET_FILE:client>
         "${CMAKE_CURRENT_SOURCE_DIR}/http/client.robot")
 
+  add_test(
+    NAME "robot-lp-communication"
+    COMMAND
+      ${Python_EXECUTABLE}
+        -m robot
+        --variable SERVER_PATH:$<TARGET_FILE:chat-server>
+        --variable CLIENT_PATH:$<TARGET_FILE:chat-client>
+        "${CMAKE_CURRENT_SOURCE_DIR}/lp/communication.robot")
+
 endif()
